@@ -11,23 +11,14 @@ exports.handler = function(event, context) {
 
     srcBucket = message.s3.bucket.name;
     dstBucket = srcBucket;
-    srcKey    =  message.s3.object.key.replace(/\+/g, " "); // undo white space replacement
-    filename = srcKey.split("/")[1];
-    dstKey = ""; // WIDTHxHEIGHT/filename
+    srcKey    =  withoutWhitespaceReplacement(message.s3.object.key);
+    filename  = srcKey.split("/")[1];
+    dstKey    = ""; // WIDTHxHEIGHT/filename
 
     // Infer the image type
-    var typeMatch = srcKey.match(/\.([^.]*)$/);
-    if (!typeMatch) {
-        var err_message='Unable to infer image type for ' + srcKey;
-        console.error(err_message);
-        return context.done();
-    }
-    var imageType = typeMatch[1];
-    if (imageType != "jpeg" && imageType != "jpg" && imageType != "JPG" && imageType != "png" && imageType != "PNG") {
-        var err_message = 'Skipping non-image ' + srcKey;
-        console.log(err_message);
-        return context.done();
-    }
+    var extension = fileExtension(srcKey);
+    if (isNotPresent(extension, srcKey)) return context.done();
+    if (isNotValid(extension, srcKey)) return context.done();
 
     // Download the image from S3
     s3.getObject({
@@ -106,3 +97,30 @@ var resize = function(size, width_height, imageType, original, srcKey, dstBucket
         }
     );
 };
+
+function withoutWhitespaceReplacement(location) {
+    return location.replace(/\+/g, " ");
+}
+
+function fileExtension(location) {
+    try {
+        return location.match(/\.([^.]*)$/)[1].toLowerCase();
+    } catch {
+        return null;
+    }
+}
+
+function isNotPresent(extension, location) {
+    if (!extension) {
+        console.error('Unable to infer image type for ' + location);
+        return true;
+    }
+}
+
+function isNotValid(extension, location) {   
+    if (!["jpg", "jpeg", "png"].includes(extension)) {
+        var err_message = 'Skipping non-image ' + location;
+        console.log('Skipping non-image ' + location);
+        return true;
+    }
+}
